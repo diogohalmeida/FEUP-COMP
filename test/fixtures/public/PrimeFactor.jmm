@@ -1,0 +1,54 @@
+import io;
+class PrimeFactor {
+    int[] test_arr;
+
+    public int find_maximum(int[] arr) {
+        int i;
+        int maximum;
+        int value;
+
+        i = 1;
+        maximum = arr[0];
+        while (i < arr.length) {
+            value = arr[i];
+            if (maximum < value) {
+                maximum = value;
+            } else {
+            }
+            i = i + 1;
+        }
+        return maximum;
+    }
+
+    public int resto(int a, int b) {
+        int aux;
+        aux=a/b;
+        return a-aux*b;
+    }
+
+    public int[] getPrimes(int n) {
+        int d;
+        int aux;
+        test_arr = new int[1000];
+        d = 2;
+        aux = 0;
+        while (!(n < 2)) {
+            while (!(this.resto(n, d))) {
+                test_arr[aux] = d;
+                n = n / d;
+            }
+            d = d + 1;
+        }
+        return test_arr;
+    }
+
+    public static void main(String[] args) {
+        int[] arr;
+        int max;
+        PrimeFactor primeArray;
+        primeArray = new PrimeFactor();
+        arr = primeArray.getPrimes(13195);
+        max = primeArray.find_maximum(arr);
+        io.println(max);
+    }
+}

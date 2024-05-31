@@ -1,0 +1,325 @@
+options
+{
+    LOOKAHEAD=1;
+    NODE_SCOPE_HOOK=true;
+}
+
+PARSER_BEGIN(Parser)
+
+import pt.up.fe.comp.jmm.report.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Parser
+{
+    private int errors = 0;
+    private List<Report> reports = new ArrayList<Report>();
+    private int nParentheses = 0;
+    public static void main(String args[]) throws ParseException {
+      	System.out.println("Write an arithmetic expression:");
+		Parser myParser = new Parser(System.in);
+		SimpleNode root = myParser.Program(); // returns reference to root node
+
+		root.dump(""); // prints the tree on the screen
+
+		//System.out.println("Expression value: "+myCalc.eval(root));
+    }
+
+    void jjtreeOpenNodeScope(Node n) {
+        ((SimpleNode)n).put("line", Integer.toString(getToken(1).beginLine));
+        ((SimpleNode)n).put("col", Integer.toString(getToken(1).beginColumn));
+    }
+
+    void jjtreeCloseNodeScope(Node n) {
+    }
+
+    public List<Report> getReports(){
+	    return this.reports;
+	}
+}
+
+PARSER_END(Parser)
+
+SKIP :
+{
+	" " | "\r" | "\t" | "\n" | < "//"(~["\r","\n"])* > | "/*" : ENDCOMMENT
+
+}
+
+<ENDCOMMENT> SKIP:
+{
+    "*/" : DEFAULT
+    | <~[]>
+}
+
+/*
+TOKEN:
+{
+    	< INTEGER: (["0"-"9"])+ >
+	|   < LF: "\n" >
+}*/
+TOKEN: {
+    < IMPORT: "import" >
+    | < CLASS: "class" >
+    | < EXTENDS: "extends" >
+    | < PUBLIC: "public" >
+    | < STATIC: "static" >
+    | < VOID: "void" >
+    | < NEW: "new" >
+    | < LEN: "length" >
+    | < MAIN: "main" >
+    | < STRING: "String" >
+    | < INT: "int" >
+    | < BOOLEAN: "boolean" >
+    | < IF: "if" >
+    | < THEN: "then" >
+    | < ELSE: "else" >
+    | < WHILE: "while">
+    | < TRUE: "true" >
+    | < FALSE: "false" >
+    | < THIS: "this" >
+    | < LTHAN: "<" >
+    | < GTHAN: ">" >
+    | < PLUS: "+" >
+    | < MINUS: "-" >
+    | < ASTERISK: "*" >
+    | < FSLASH: "/" >
+    | < EQUALS: "=">
+    | < DEQUALS: "==" >
+    | < AND: "&&" >
+    | < SEMICOL: ";" >
+    | < COL: "," >
+    | < DOT: "." >
+    | < NOT: "!" >
+    | < LBRACKET: "{" >
+    | < RBRACKET: "}" >
+    | < OPAREN: "(" >
+    | < CPAREN: ")" >
+    | < OSBRACKET: "[" >
+    | < CSBRACKET: "]" >
+    | < RETURN: "return" >
+    | < NUM: ((["0"-"9"])+) >
+    | < IDENTIFIER: (["A"-"Z", "a"-"z", "_", "$"](["0"-"9", "A"-"Z", "a"-"z", "_", "$"])*) >
+}
+
+
+SimpleNode Program(): {}
+{
+    try{
+        (ImportDeclaration())* ClassDeclaration() <EOF>
+   }
+   catch (ParseException e) {
+        reports.add(new Report(ReportType.ERROR, Stage.SYNTATIC, token.beginLine, "Could not parse file!"));
+        e.printStackTrace();
+    }
+    {return jjtThis;}
+}
+
+void ImportDeclaration(): {Token t; Token t1;} // 1: positive; -1: negative, because of the ‘-‘ unitary operator
+{
+    (<IMPORT> t1=<IDENTIFIER> {jjtThis.put("name", t1.image);} #ImportedPackage)
+        (<DOT> t1=<IDENTIFIER>{jjtThis.put("name", t1.image);} #ImportedPackage)* <SEMICOL>
+    {jjtThis.put("name",t1.image);}
+}
+
+// (<IMPORT> t=<IDENTIFIER> {jjtThis.put("name", t.image);} #ImportedPackage)
+// (<DOT> t1=<IDENTIFIER>{jjtThis.put("name", t1.image);} #ImportedPackage)* <SEMICOL>
+
+void ClassDeclaration(): {Token t; Token t1;}
+{
+    <CLASS> t=<IDENTIFIER> (<EXTENDS> t1=<IDENTIFIER>{jjtThis.put("name", t1.image);} #ExtendedClassName)?  {jjtThis.put("name", t.image);} #ClassName
+    <LBRACKET>
+        (VarDeclaration())*
+        (MethodDeclaration())*
+    <RBRACKET>
+}
+
+void VarDeclaration(): {Token t;}
+{
+    (Type() t=<IDENTIFIER>{jjtThis.put("name", t.image);} #VarName) <SEMICOL>
+}
+
+void MethodDeclaration(): {Token t; Token t1;}
+{
+    <PUBLIC> 
+    (
+        Type() t=<IDENTIFIER>{jjtThis.put("name", t.image);} 
+            <OPAREN> {nParentheses++;}
+                ([Parameter() (<COL> Parameter())*] #Parameters) 
+            <CPAREN>{nParentheses--;}
+        <LBRACKET>
+            (Body() (<RETURN> Expression()  <SEMICOL> #Return(1)) )#Body
+        <RBRACKET>
+    |
+        <STATIC> <VOID> <MAIN>{jjtThis.put("name", "main");}  
+            (<OPAREN>{nParentheses++;}
+                (
+                    (<STRING> <OSBRACKET> <CSBRACKET> {jjtThis.put("name", "String[]");} #Type)
+                        t1=<IDENTIFIER>{jjtThis.put("name", t1.image);}
+                ) #Parameter
+            <CPAREN>{nParentheses--;} #Parameters(1))
+        <LBRACKET>
+            (Body() #Body)
+        <RBRACKET>
+    )
+}
+
+void Parameter():{Token t1;}{
+    Type() t1=<IDENTIFIER>{jjtThis.put("name", t1.image);}
+}
+
+void Body() #void:{}{
+    (LOOKAHEAD(2) VarDeclaration())*
+    (Statement())*
+}
+
+void Type() #void: {Token t;}
+{
+    (<INT>((<OSBRACKET> <CSBRACKET>)#Array)?#Int)
+    | <BOOLEAN> #Boolean
+    | t=<IDENTIFIER> {jjtThis.put("name", t.image);} #Type
+}
+
+
+void Statement() #void: {}
+{
+    ( <LBRACKET> (Statement())* <RBRACKET> )
+    | IfStatement()
+    | WhileStatement()
+    | LOOKAHEAD(<IDENTIFIER><EQUALS>) Assignment()
+    | LOOKAHEAD(<IDENTIFIER><OSBRACKET>) ArrayAssignment()
+    | Expression() <SEMICOL>
+}
+
+void Assignment(): {}
+{
+    Variable() <EQUALS> Expression() <SEMICOL>
+}
+
+void ArrayAssignment(): {}
+{
+    Variable() <OSBRACKET> Expression() <CSBRACKET> <EQUALS> Expression() <SEMICOL>
+}
+
+void Variable() #Name:{Token t;}{
+    t=<IDENTIFIER> {jjtThis.put("name", t.image);}
+}
+
+void IfStatement() #void: {}
+{
+    ((<IF><OPAREN>{nParentheses++;} Expression() <CPAREN>{nParentheses--;} #Condition(1) (Statement())#Body)#If ElseStatement() #Else(1))
+}
+
+void ElseStatement() #void: {}
+{
+    <ELSE> Statement()#Body
+}
+
+void WhileStatement() #void: {Token t1;}
+{
+    (<WHILE>
+    try {
+        <OPAREN>{nParentheses++;} Expression() <CPAREN> {nParentheses--;}#Condition(1)
+    }
+    catch (ParseException e) {
+        System.out.println(e.toString());
+        {
+            errors++;
+            Report report = new Report(ReportType.ERROR, Stage.SYNTATIC, token.beginLine, e.getMessage());
+            reports.add(report);
+            if(errors == 10){
+                System.out.println("10 Errors found, aborting!");
+                throw new RuntimeException("10 Errors found, aborting!");
+            }
+        }
+        do {
+            t1 = getNextToken();
+             if(t1.kind == OPAREN){
+                nParentheses--;
+            }
+            if(t1.kind == CPAREN){
+                nParentheses++;
+            }
+            if (t1.kind == EOF){
+                System.out.println("End of File!");
+                return;
+            }
+        } while (nParentheses!=0);
+    }
+    (Statement())#Body) #While
+}
+
+void Expression() #void: {}
+{
+    Expression2() ( <AND> Expression2()#And(2))*
+}
+
+void Expression2() #void: {}
+{
+    Expression3() ( <LTHAN> Expression3()#LessThan(2))*
+}
+
+void Expression3() #void: {}
+{
+    Expression4() ( 
+        (<PLUS> Expression4() #Add(2)) 
+        | 
+        (<MINUS> Expression4() #Sub(2)) 
+    )*
+}
+
+
+void Expression4() #void: {}
+{
+    Expression5() ( 
+        (<ASTERISK> Expression5() #Mul(2)) 
+        | 
+        (<FSLASH> Expression5() #Div(2))
+    )*
+}
+
+void Expression5() #void: {}
+{
+    (<NOT> Expression6() #Not)
+    | Expression6()
+}
+
+void Expression6() #void: {Token t, t1;}
+{
+    ( 
+        Num()
+        | <TRUE> #True
+        | <FALSE> #False
+        | Variable()
+        | <THIS> #This
+        | <NEW> (NewArray() | NewInstance())
+        | (<OPAREN>{nParentheses++;} Expression() <CPAREN>{nParentheses--;}) //#Expression
+    )
+    (
+        <OSBRACKET> Expression()#ArraySize <CSBRACKET>#ArrayAccess(2)
+    |
+         <DOT> ( 
+                <LEN> #Length(1) 
+             | 
+                MethodCall()
+         )
+    )?
+}
+
+void MethodCall() #MethodCall(2):{Token t1;}{
+    t1=<IDENTIFIER> {jjtThis.put("name", t1.image);} 
+    <OPAREN>{nParentheses++;} ((Expression() (<COL> Expression())*)? #ArgsList ) <CPAREN>{nParentheses--;}
+}
+
+void Num():{Token t;}
+{
+    t=<NUM> {jjtThis.put("value", t.image);}
+}
+
+void NewArray():{}{
+    <INT> <OSBRACKET> Expression() <CSBRACKET>
+}
+
+void NewInstance():{Token t;}{
+    t=<IDENTIFIER> <OPAREN>{nParentheses++;} <CPAREN>{nParentheses--;} {jjtThis.put("name", t.image);}
+}
